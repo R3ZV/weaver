@@ -1,0 +1,14 @@
+[package]
+name = "weaver"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+libbpf-rs = "0.24"
+anyhow = "1.0"
+ctrlc = "3.4"
+scx_cargo = "1.1.0"
+scx_utils = "1.1.0"
+
+[build-dependencies]
+libbpf-cargo = "0.24"
