@@ -70,7 +70,7 @@ impl<'a> Scheduler<'a> {
         let nr_sched_congested = *self.bpf.nr_sched_congested_mut();
 
         println!(
-            "user={} kernel={} cancel={} bounce={} fail={} cong={}",
+            "[WEAVER LOG]: user={} kernel={} cancel={} bounce={} fail={} cong={}",
             nr_user_dispatches,
             nr_kernel_dispatches,
             nr_cancel_dispatches,
