@@ -1,8 +1,6 @@
 fn main() {
-    scx_cargo::BpfBuilder::new()
+    scx_rustland_core::RustLandBuilder::new()
         .unwrap()
-        // .enable_intf("src/bpf/intf.h", "bpf_intf.rs")
-        .enable_skel("src/bpf/main.bpf.c", "bpf")
-        .compile_link_gen()
+        .build()
         .unwrap();
 }

@@ -4,11 +4,18 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-libbpf-rs = "0.24"
-anyhow = "1.0"
-ctrlc = "3.4"
-scx_cargo = "1.1.0"
+anyhow = "1"
+plain = "0.2"
+procfs = "0.18"
+ctrlc = { version = "3", features = ["termination"] }
+libbpf-rs = "=0.26.1"
+libc = "0.2"
 scx_utils = "1.1.0"
+scx_rustland_core = "2.4.11"
 
 [build-dependencies]
-libbpf-cargo = "0.24"
+scx_cargo = "1.1.0"
+scx_rustland_core = "2.4.11"
+
+[features]
+enable_backtrace = []
