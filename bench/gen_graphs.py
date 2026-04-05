@@ -5,12 +5,24 @@ import glob
 import os
 
 
+def extract_metadata(filename, test_suffix):
+    base_name = os.path.basename(filename).replace(test_suffix, "")
+    sched_name, runtime, m_threads, w_threads = base_name.rsplit("-", 3)
+
+    subtitle = (
+        f"(Runtime: {runtime}s | M-Threads: {m_threads} | W-Threads: {w_threads})"
+    )
+    return sched_name, subtitle
+
+
 def plot_latencies():
     csv_files = glob.glob("results/latencies/*_schbench.csv")
     dataframes = []
+    graph_subtitle = ""
 
     for file in csv_files:
-        sched_name = os.path.basename(file).replace("_schbench.csv", "")
+        sched_name, subtitle = extract_metadata(file, "_schbench.csv")
+        graph_subtitle = subtitle
 
         df = pd.read_csv(file)
         df["Scheduler"] = sched_name
@@ -29,7 +41,9 @@ def plot_latencies():
             errorbar=None,
         )
 
-        plt.title("Wakeup Latency Distribution (schbench)")
+        plt.title(
+            f"Wakeup Latency Distribution (schbench)\n{graph_subtitle}", fontsize=12
+        )
         plt.ylabel("Latency (ms)")
         plt.xlabel("Percentile")
 

@@ -109,7 +109,7 @@ for sched in "${SCHEDULERS[@]}"; do
     fi
 
     print_test_banner "[Test 1]: Running schbench for ${RUNTIME}s..."
-    echo "Percentile,Latency" > results/latencies/${sched}_schbench.csv
+    echo "Percentile,Latency" > results/latencies/${sched}-${RUNTIME}-${M_THREADS}-${W_THREADS}_schbench.csv
     ./schbench/schbench --message-threads $M_THREADS --threads $W_THREADS --runtime $RUNTIME 2>&1 | \
     awk '{
         gsub(/\*/, "");
@@ -117,7 +117,7 @@ for sched in "${SCHEDULERS[@]}"; do
             gsub(/th:/, "", $1);
             print $1","$2 
         }
-    }' >> results/latencies/${sched}_schbench.csv &
+    }' >> results/latencies/${sched}-${RUNTIME}-${M_THREADS}-${W_THREADS}_schbench.csv &
 
     SCHBENCH_PID=$!
     show_progress $RUNTIME $SCHBENCH_PID
