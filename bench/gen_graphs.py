@@ -21,20 +21,19 @@ def plot_latencies():
 
         plt.figure(figsize=(10, 6))
 
-        sb.lineplot(
+        sb.barplot(
             x="Percentile",
             y="Latency",
             hue="Scheduler",
-            style="Scheduler",
-            markers=True,
-            dashes=False,
-            linewidth=2,
             data=all_data,
+            errorbar=None,
         )
 
         plt.title("Wakeup Latency Distribution (schbench)")
         plt.ylabel("Latency (ms)")
         plt.xlabel("Percentile")
+
+        plt.gca().set_axisbelow(True)
         plt.grid(True, linestyle="--", alpha=0.7)
 
         plt.savefig("graphs/schbench_latencies.pdf")

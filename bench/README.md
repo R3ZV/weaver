@@ -22,3 +22,7 @@ All the graphs are located in `graphs` directory.
 
 `bench.sh` will run the following benchmarks:
 - TODO: explain why and how is everything tested
+
+When we spawn threads using `schbench` the number of spawned threads
+is based on the following formula:
+`Total Active Threads = Message Threads + (Message Threads × Worker Threads)`
