@@ -13,7 +13,7 @@ run_schbench() {
     echo "│ CPU Cores: $cores | M-Threads: $m_threads | W-Threads: $w_threads      │"
     echo "└──────────────────────────────────────────────────┘"
 
-    echo "Percentile,Latency" > "results/latencies/${sched}-${runtime}-${m_threads}-${w_threads}_schbench.csv"
+    echo "Percentile,Latency" > "results/latencies/${sched}-${runtime}-${m_threads}-${w_threads}.csv"
 
     ./schbench/schbench --message-threads $m_threads --threads $w_threads --runtime $runtime 2>&1 | \
     awk '{
@@ -22,7 +22,7 @@ run_schbench() {
             gsub(/th:/, "", $1);
             print $1","$2 
         }
-    }' >> "results/latencies/${sched}-${runtime}-${m_threads}-${w_threads}_schbench.csv" &
+    }' >> "results/latencies/${sched}-${runtime}-${m_threads}-${w_threads}.csv" &
 
     local SCHBENCH_PID=$!
     show_progress "$runtime" "$SCHBENCH_PID"

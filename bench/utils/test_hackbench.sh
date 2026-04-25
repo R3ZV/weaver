@@ -13,14 +13,14 @@ run_hackbench() {
 
     echo "┌──────────────────HACKBENCH───────────────────┐"
     printf "│ Datasize: %-4s | Loops: %-5s | Groups: %-4s │\n" "$HB_DATASIZE" "$HB_LOOPS" "$HB_GROUPS"
-    printf "│ FDs: %-3s | Mode: %-21s │\n" "$HB_FDS" "$HB_MODE"
+    printf "│ FDs: %-3s | Mode: %-21s       │\n" "$HB_FDS" "$HB_MODE"
     echo "└──────────────────────────────────────────────┘"
 
     hackbench --datasize $HB_DATASIZE \
               --loops $HB_LOOPS \
               --groups $HB_GROUPS \
               --fds $HB_FDS \
-              --$HB_MODE > "results/hackbench/${sched}_hackbench.log" 2>&1 &
+              --$HB_MODE > "results/hackbench/${sched}.log" 2>&1 &
 
     local HACK_PID=$!
     show_spinner "$HACK_PID"

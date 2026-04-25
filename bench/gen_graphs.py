@@ -27,13 +27,13 @@ class HackbenchMetrics:
     time: float
 
 
-def extract_metadata(filename: str, test_suffix: str):
+def extract_metadata(filename: str):
     """
     In this case the metadata is part of the file name instead of the file
     content compared to hackbench.
     """
-    base_name = os.path.basename(filename).replace(test_suffix, "")
-    sched_name, runtime, m_threads, w_threads = base_name.rsplit("-", 3)
+    filename = filename.replace(".csv", "")
+    sched_name, runtime, m_threads, w_threads = filename.rsplit("-", 3)
 
     subtitle = (
         f"(Runtime: {runtime}s | M-Threads: {m_threads} | W-Threads: {w_threads})"
@@ -42,12 +42,12 @@ def extract_metadata(filename: str, test_suffix: str):
 
 
 def plot_latencies():
-    csv_files = glob.glob("results/latencies/*_schbench.csv")
+    csv_files = glob.glob("results/latencies/*.csv")
     dataframes = []
     graph_subtitle = ""
 
     for file in csv_files:
-        sched_name, subtitle = extract_metadata(file, "_schbench.csv")
+        sched_name, subtitle = extract_metadata(file)
         graph_subtitle = subtitle
 
         df = pd.read_csv(file)
@@ -119,12 +119,12 @@ def hackbench_metadata(file: str) -> HackbenchMetrics:
 
 
 def plot_context_switch_overhead():
-    log_files = glob.glob("results/hackbench/*_hackbench.log")
+    log_files = glob.glob("results/hackbench/*.log")
     results: list[PlotMetrics] = []
 
     title = ""
     for file in log_files:
-        sched_name = os.path.basename(file).replace("_hackbench.log", "")
+        sched_name = os.path.basename(file).replace(".log", "")
         metadata = hackbench_metadata(file)
         curr_title = (
             "Groups={}, FileDescriptors={}, MessagesSent={}, MessageBytes={}".format(
@@ -167,8 +167,8 @@ def plot_context_switch_overhead():
             if isinstance(container, BarContainer):
                 _ = ax.bar_label(container, fmt="%.3fs", padding=3)
 
-        plt.savefig("graphs/hackbench_results.pdf")
-        print("[INFO] Created graphs/hackbench_results.pdf")
+        plt.savefig("graphs/hackbench_ctx_switch.pdf")
+        print("[INFO] Created graphs/hackbench_ctx_switch.pdf")
         plt.close()
     else:
         print("[WARN] No valid hackbench logs found.")

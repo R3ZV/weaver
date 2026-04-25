@@ -3,6 +3,7 @@
 source ./utils/style.sh
 source ./utils/test_schbench.sh
 source ./utils/test_hackbench.sh
+source ./utils/test_vkmark.sh
 
 check_dependencies
 
@@ -24,6 +25,7 @@ clear
 rm -rf results || true
 mkdir -p results/latencies
 mkdir -p results/hackbench
+mkdir -p results/vkmark
 
 cat << "EOF"
 
@@ -51,6 +53,7 @@ for sched in "${SCHEDULERS[@]}"; do
 
     run_schbench "$sched" "$RUNTIME" "$M_THREADS" "$W_THREADS" "$CORES"
     run_hackbench "$sched"
+    run_vkmark "$sched" "$RUNTIME"
 
     if [ "$sched" != "default" ]; then
         sudo kill -SIGINT $SCHED_PID

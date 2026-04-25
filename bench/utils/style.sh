@@ -1,17 +1,11 @@
 #!/bin/bash
 
-# ==========================================
-# CONSTANTS & COLORS
-# ==========================================
 BOLD="\033[1m"
 RESET="\033[0m"
 RED="\033[31m"
 YELLOW="\033[33m"
 GREEN="\033[32m"
 
-# ==========================================
-# DEPENDENCY CHECKS
-# ==========================================
 check_dependencies() {
     if [ "$EUID" -ne 0 ]; then
         echo -e "${BOLD}${RED}[ERROR]${RESET}: Need sudo to load the eBPF scheduler."
@@ -31,11 +25,26 @@ check_dependencies() {
         echo -e "${BOLD}Install package${RESET}: rt-tests"
         exit 1
     fi
+
+    if ! command -v stress-ng &> /dev/null; then
+        echo -e "${BOLD}${RED}[ERROR]${RESET}: Couldn't find stress-ng."
+        echo -e "${BOLD}Install package: stress-ng.${RESET}"
+        exit 1
+    fi
+
+    if ! command -v mangohud &> /dev/null; then
+        echo -e "${BOLD}${RED}[ERROR]${RESET}: Couldn't find mangohud."
+        echo -e "${BOLD}Install package: MangoHud.${RESET}"
+        exit 1
+    fi
+
+    if ! command -v vkmark &> /dev/null; then
+        echo -e "${BOLD}${RED}[ERROR]${RESET}: Couldn't find vkmark."
+        echo -e "${BOLD}Install package: vkmark.${RESET}"
+        exit 1
+    fi
 }
 
-# ==========================================
-# UI COMPONENTS
-# ==========================================
 show_progress() {
     local duration=$1
     local pid=$2
@@ -54,7 +63,7 @@ show_progress() {
         local bar="${bar_spaces// /█}"
         local space="${empty_spaces// /░}"
 
-        printf "\r${BOLD}Progress:${RESET} [ ${GREEN}%s%s${RESET} ] %3d%% (%ds / %ds)" "$bar" "$space" "$percent" "$elapsed" "$duration"
+        printf "\r${BOLD}Progress:${RESET} [${GREEN}%s%s${RESET}] %3d%% (%ds / %ds)" "$bar" "$space" "$percent" "$elapsed" "$duration"
 
         sleep 1
         elapsed=$(( elapsed + 1 ))
@@ -62,9 +71,9 @@ show_progress() {
 
     local full_spaces=$(printf "%${bar_length}s" "")
     local full_bar="${full_spaces// /█}"
-    printf "\r${BOLD}Progress:${RESET} [${GREEN}%s${RESET}] 100%% (%ds / %ds)\n" "$full_bar" "$duration" "$duration"
+    printf "\r\033[K${BOLD}Progress:${RESET} [${GREEN}%s${RESET}] 100%% (%ds / %ds)\n" "$full_bar" "$duration" "$duration"
 
-    tput cnorm 
+    tput cnorm
 }
 
 show_spinner() {
