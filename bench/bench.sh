@@ -14,6 +14,13 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
+if [ ! -x "./schbench/schbench" ]; then
+    echo -e "${BOLD}${RED}[ERROR]${RESET}: schbench is not executable or doesn't exist."
+    echo -e "${BOLD}Make sure pulled the submodules${RESET}: git submodule update --init --recursive"
+    echo -e "${BOLD}Then build schbench${RESET}: cd schbench && make"
+    exit 1
+fi
+
 
 while getopts "t:h" opt; do
   case $opt in
@@ -69,10 +76,10 @@ print_test_banner() {
     local pad1=$(( box_width - ${#line1} ))
     local pad2=$(( box_width - ${#line2} - sched_len ))
 
-    echo "┌──────────────────INFO──────────────────┐"
+    echo "┌───────────────────INFO───────────────────┐"
     printf "│%s%*s│\n" "$line1" "$pad1" ""
     printf "│%s${BOLD}%s${RESET}%*s│\n" "$line2" "$sched" "$pad2" ""
-    echo "└────────────────────────────────────────┘"
+    echo "└──────────────────────────────────────────┘"
 }
 
 clear
@@ -96,9 +103,9 @@ if [ "$M_THREADS" -lt 2 ]; then M_THREADS=2; fi
 
 W_THREADS=$(( CORES * 2 ))
 
-echo "┌────────────────────INFO────────────────────┐"
+echo "┌─────────────────────INFO─────────────────────┐"
 echo "│ CPU Cores: $CORES | M-Threads: $M_THREADS | W-Threads: $W_THREADS │"
-echo "└────────────────────────────────────────────┘"
+echo "└──────────────────────────────────────────────┘"
 
 SCHEDULERS=("default" "weaver")
 for sched in "${SCHEDULERS[@]}"; do

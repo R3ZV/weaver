@@ -1,8 +1,14 @@
 # Run locally
 
-Install rust for sudo user `sudo rustup install stable`
+Dependencies:
+- Rust
+- clang
+- llvm
+- bpftool
+- linux-headers
 
-Then you can compile & load the epbf program using `sudo cargo run`
+Build the project `cargo build --release` and in order to execute the binary
+you have to use `sudo ./target/release/weaver`.
 
 # Benchmarking
 

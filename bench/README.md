@@ -9,7 +9,8 @@ For Benchmarking we are going to use following tools to our aid:
 - schbench (submodule)
 - uv
 - awk
-- git
+- bash
+
 
 To start and collect data use `bench.sh`.
 
