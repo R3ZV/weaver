@@ -1,3 +1,7 @@
 [submodule "schbenc"]
 	path = bench/schbench
 	url = https://git.kernel.org/pub/scm/linux/kernel/git/mason/schbench.git
+
+[submodule "schbenc"]
+	path = scx
+	url = https://github.com/R3ZV/scx/

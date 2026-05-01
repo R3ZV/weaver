@@ -17,6 +17,7 @@ const SLICE_NS: u64 = 5_000_000;
 
 struct Scheduler<'a> {
     bpf: BpfScheduler<'a>,
+    tasks: Vec<QueuedTask>,
 }
 
 impl<'a> Scheduler<'a> {
@@ -29,16 +30,31 @@ impl<'a> Scheduler<'a> {
             false,    // partial (false = include all tasks)
             false,    // debug (false = debug mode off)
             true,     // builtin_idle (true = allow BPF to use idle CPUs if available)
+            true,     // numa_local (true = allow BPF to use a NUMA-local idle CPU
             SLICE_NS, // default time slice (for tasks automatically dispatched by the backend)
             "weaver", // name of the scx ops
         )?;
-        Ok(Self { bpf })
+        Ok(Self {
+            bpf,
+            tasks: Vec::new(),
+        })
+    }
+
+    fn consume_wake_events(&mut self) {
+        while let Ok(Some(event)) = self.bpf.dequeue_wakeup_event() {
+            eprintln!("Task {} woke up task {}", event.waker_pid, event.wakee_pid);
+        }
+    }
+
+    fn retrieve_new_tasks(&mut self) {
+        while let Ok(Some(task)) = self.bpf.dequeue_task() {
+            self.tasks.push(task);
+        }
     }
 
     fn dispatch_tasks(&mut self) {
-        let nr_waiting = *self.bpf.nr_queued_mut();
-
-        while let Ok(Some(task)) = self.bpf.dequeue_task() {
+        let nr_waiting = self.tasks.len() as u64;
+        while let Some(task) = self.tasks.pop() {
             let mut dispatched_task = DispatchedTask::new(&task);
             let cpu = self.bpf.select_cpu(task.pid, task.cpu, task.flags);
             dispatched_task.cpu = if cpu >= 0 { cpu } else { RL_CPU_ANY };
@@ -91,10 +107,12 @@ impl<'a> Scheduler<'a> {
         let mut prev_ts = Self::now();
 
         while !self.bpf.exited() {
+            self.retrieve_new_tasks();
             self.dispatch_tasks();
 
             let curr_ts = Self::now();
             if curr_ts > prev_ts {
+                self.consume_wake_events();
                 self.print_stats();
                 prev_ts = curr_ts;
             }
