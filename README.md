@@ -22,3 +22,5 @@ See [this](./bench/README.md).
 - https://docs.kernel.org/scheduler/sched-design-CFS.html
 - https://lwn.net/Articles/1051430/
 - https://www.youtube.com/watch?v=gZaZIZ1W1Vo
+- https://en.wikipedia.org/wiki/Exponential_decay
+- https://web.archive.org/web/20260225090858/https://citeseerx.ist.psu.edu/document?doi=805acf7726282721504c8f00575d91ebfd750564&repid=rep1&type=pdf

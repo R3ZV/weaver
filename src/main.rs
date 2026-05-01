@@ -4,6 +4,7 @@ pub mod bpf_intf;
 
 #[rustfmt::skip]
 mod bpf;
+use std::collections::{BinaryHeap, HashMap};
 use std::mem::MaybeUninit;
 use std::time::SystemTime;
 
@@ -13,11 +14,65 @@ use libbpf_rs::OpenObject;
 use scx_utils::UserExitInfo;
 use scx_utils::libbpf_clap_opts::LibbpfOpts;
 
-const SLICE_NS: u64 = 5_000_000;
+const RUNTIME_NS: u64 = 5_000_000;
+const LC_HALF_LIFE_NS: f64 = 5_000_000.0;
+const LC_WAKEUP_BOOST: f64 = 100.0;
+
+struct Task {
+    inner: QueuedTask,
+    v_deadline: u64,
+}
+
+impl PartialEq for Task {
+    fn eq(&self, other: &Self) -> bool {
+        self.v_deadline == other.v_deadline
+    }
+}
+
+impl Eq for Task {}
+
+impl Ord for Task {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        other.v_deadline.cmp(&self.v_deadline)
+    }
+}
+
+impl PartialOrd for Task {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+struct TaskMetadata {
+    // latency criticality
+    lc: f64,
+    vtime: f64,
+    prev_decay_ns: u64,
+}
+
+impl TaskMetadata {
+    fn new(now_ns: u64) -> Self {
+        Self {
+            vtime: 0.0,
+            lc: 0.0,
+            prev_decay_ns: now_ns,
+        }
+    }
+
+    fn decay(&mut self, now_ns: u64) {
+        let delta_ns = now_ns.saturating_sub(self.prev_decay_ns);
+        if delta_ns > 0 {
+            let decay_factor = (0.5_f64).powf(delta_ns as f64 / LC_HALF_LIFE_NS);
+            self.lc *= decay_factor;
+        }
+        self.prev_decay_ns = now_ns;
+    }
+}
 
 struct Scheduler<'a> {
     bpf: BpfScheduler<'a>,
-    tasks: Vec<QueuedTask>,
+    tasks: BinaryHeap<Task>,
+    meta: HashMap<i32, TaskMetadata>,
 }
 
 impl<'a> Scheduler<'a> {
@@ -26,40 +81,62 @@ impl<'a> Scheduler<'a> {
         let bpf = BpfScheduler::init(
             open_object,
             open_opts.clone().into_bpf_open_opts(),
-            0,        // exit_dump_len (buffer size of exit info, 0 = default)
-            false,    // partial (false = include all tasks)
-            false,    // debug (false = debug mode off)
-            true,     // builtin_idle (true = allow BPF to use idle CPUs if available)
-            true,     // numa_local (true = allow BPF to use a NUMA-local idle CPU
-            SLICE_NS, // default time slice (for tasks automatically dispatched by the backend)
-            "weaver", // name of the scx ops
+            0,          // exit_dump_len (buffer size of exit info, 0 = default)
+            false,      // partial (false = include all tasks)
+            false,      // debug (false = debug mode off)
+            true,       // builtin_idle (true = allow BPF to use idle CPUs if available)
+            true,       // numa_local (true = allow BPF to use a NUMA-local idle CPU
+            RUNTIME_NS, // default time slice (for tasks automatically dispatched by the backend)
+            "weaver",   // name of the scx ops
         )?;
         Ok(Self {
             bpf,
-            tasks: Vec::new(),
+            tasks: BinaryHeap::new(),
+            meta: HashMap::new(),
         })
     }
 
     fn consume_wake_events(&mut self) {
         while let Ok(Some(event)) = self.bpf.dequeue_wakeup_event() {
-            eprintln!("Task {} woke up task {}", event.waker_pid, event.wakee_pid);
+            let now = Self::now();
+            let entry = self
+                .meta
+                .entry(event.wakee_pid)
+                .or_insert(TaskMetadata::new(now));
+            entry.decay(now);
+            entry.lc += LC_WAKEUP_BOOST;
         }
     }
 
     fn retrieve_new_tasks(&mut self) {
         while let Ok(Some(task)) = self.bpf.dequeue_task() {
-            self.tasks.push(task);
+            let now = Self::now();
+            let weight = (task.weight as f64).max(1.0);
+            let exec_runtime = task.exec_runtime as f64;
+
+            let entry = self.meta.entry(task.pid).or_insert(TaskMetadata::new(now));
+            entry.decay(now);
+            entry.vtime += exec_runtime / weight;
+
+            let v_deadline = entry.vtime + (exec_runtime / (weight + entry.lc));
+            self.tasks.push(Task {
+                inner: task,
+                v_deadline: v_deadline as u64,
+            })
         }
     }
 
     fn dispatch_tasks(&mut self) {
         let nr_waiting = self.tasks.len() as u64;
         while let Some(task) = self.tasks.pop() {
-            let mut dispatched_task = DispatchedTask::new(&task);
-            let cpu = self.bpf.select_cpu(task.pid, task.cpu, task.flags);
+            let mut dispatched_task = DispatchedTask::new(&task.inner);
+            let cpu = self.bpf.select_cpu(
+                dispatched_task.pid,
+                dispatched_task.cpu,
+                dispatched_task.flags,
+            );
             dispatched_task.cpu = if cpu >= 0 { cpu } else { RL_CPU_ANY };
-
-            dispatched_task.slice_ns = SLICE_NS / (nr_waiting + 1);
+            dispatched_task.slice_ns = RUNTIME_NS / (nr_waiting + 1);
             self.bpf.dispatch_task(&dispatched_task).unwrap();
         }
         self.bpf.notify_complete(0);
@@ -100,22 +177,24 @@ impl<'a> Scheduler<'a> {
         SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap()
-            .as_secs()
+            .as_nanos() as u64
     }
 
     fn run(&mut self) -> Result<UserExitInfo> {
         let mut prev_ts = Self::now();
+        let stat_interval_ns = 1_000_000_000;
 
         while !self.bpf.exited() {
+            self.consume_wake_events();
             self.retrieve_new_tasks();
-            self.dispatch_tasks();
 
             let curr_ts = Self::now();
-            if curr_ts > prev_ts {
-                self.consume_wake_events();
+            if curr_ts.saturating_sub(prev_ts) > stat_interval_ns {
                 self.print_stats();
                 prev_ts = curr_ts;
             }
+
+            self.dispatch_tasks();
         }
         self.bpf.shutdown_and_report()
     }
