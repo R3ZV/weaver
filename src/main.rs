@@ -16,7 +16,7 @@ use scx_utils::libbpf_clap_opts::LibbpfOpts;
 
 const MIN_SLICE_NS: u64 = 1_000_000;
 const RUNTIME_NS: u64 = 15_000_000;
-const LC_HALF_LIFE_NS: f64 = 5_000_000.0;
+const LC_HALF_LIFE_NS: f64 = 15_000_000.0;
 const LC_WAKEUP_BOOST: f64 = 100.0;
 
 struct Task {
@@ -116,7 +116,6 @@ impl<'a> Scheduler<'a> {
             let now = Self::now();
             let weight = (task.weight as f64).max(1.0);
             let exec_runtime = task.exec_runtime as f64;
-            self.system_vtime = self.system_vtime.max(task.vtime);
 
             let entry = self
                 .meta
@@ -124,8 +123,9 @@ impl<'a> Scheduler<'a> {
                 .or_insert(TaskMetadata::new(now, self.system_vtime));
             entry.decay(now);
             entry.vtime += (exec_runtime / weight) as u64;
+            self.system_vtime = self.system_vtime.max(entry.vtime);
 
-            let v_deadline = entry.vtime as f64 + (RUNTIME_NS as f64 / (weight + entry.lc));
+            let v_deadline = entry.vtime + (RUNTIME_NS as f64 / (weight + entry.lc)) as u64;
             self.tasks.push(Task {
                 inner: task,
                 v_deadline: v_deadline as u64,
@@ -135,6 +135,11 @@ impl<'a> Scheduler<'a> {
 
     fn dispatch_tasks(&mut self) {
         let nr_waiting = self.tasks.len() as u64;
+        let exec_slice_ns = (RUNTIME_NS / (nr_waiting + 1)).max(MIN_SLICE_NS);
+
+        let dispatch_limit = 2 * *self.bpf.nr_online_cpus_mut();
+        let mut dispatched = 0;
+
         while let Some(task) = self.tasks.pop() {
             let mut dispatched_task = DispatchedTask::new(&task.inner);
             let cpu = self.bpf.select_cpu(
@@ -143,9 +148,13 @@ impl<'a> Scheduler<'a> {
                 dispatched_task.flags,
             );
             dispatched_task.cpu = if cpu >= 0 { cpu } else { RL_CPU_ANY };
-            let exec_slice = RUNTIME_NS / (nr_waiting + 1);
-            dispatched_task.slice_ns = exec_slice.max(MIN_SLICE_NS);
+            dispatched_task.slice_ns = exec_slice_ns;
             self.bpf.dispatch_task(&dispatched_task).unwrap();
+            dispatched += 1;
+
+            if dispatched == dispatch_limit {
+                break;
+            }
         }
         self.bpf.notify_complete(0);
     }
