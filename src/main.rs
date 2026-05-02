@@ -14,6 +14,7 @@ use libbpf_rs::OpenObject;
 use scx_utils::UserExitInfo;
 use scx_utils::libbpf_clap_opts::LibbpfOpts;
 
+const MIN_SLICE_NS: u64 = 1_000_000;
 const RUNTIME_NS: u64 = 15_000_000;
 const LC_HALF_LIFE_NS: f64 = 5_000_000.0;
 const LC_WAKEUP_BOOST: f64 = 100.0;
@@ -136,7 +137,8 @@ impl<'a> Scheduler<'a> {
                 dispatched_task.flags,
             );
             dispatched_task.cpu = if cpu >= 0 { cpu } else { RL_CPU_ANY };
-            dispatched_task.slice_ns = RUNTIME_NS / (nr_waiting + 1);
+            let exec_slice = RUNTIME_NS / (nr_waiting + 1);
+            dispatched_task.slice_ns = exec_slice.max(MIN_SLICE_NS);
             self.bpf.dispatch_task(&dispatched_task).unwrap();
         }
         self.bpf.notify_complete(0);
