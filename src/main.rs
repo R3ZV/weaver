@@ -134,11 +134,20 @@ impl<'a> Scheduler<'a> {
     }
 
     fn dispatch_tasks(&mut self) {
+        let nr_online_cpus = *self.bpf.nr_online_cpus_mut() as u64;
+        let nr_queued_in_kernel = *self.bpf.nr_queued_mut() as u64;
+
+        let nr_tasks_target = 2 * nr_online_cpus;
+        if nr_queued_in_kernel >= nr_tasks_target {
+            self.bpf.notify_complete(0);
+            return;
+        }
+
+        let target_dispatches = nr_tasks_target - nr_queued_in_kernel;
+        let mut dispatched = 0;
+
         let nr_waiting = self.tasks.len() as u64;
         let exec_slice_ns = (RUNTIME_NS / (nr_waiting + 1)).max(MIN_SLICE_NS);
-
-        let dispatch_limit = 2 * *self.bpf.nr_online_cpus_mut();
-        let mut dispatched = 0;
 
         while let Some(task) = self.tasks.pop() {
             let mut dispatched_task = DispatchedTask::new(&task.inner);
@@ -149,10 +158,11 @@ impl<'a> Scheduler<'a> {
             );
             dispatched_task.cpu = if cpu >= 0 { cpu } else { RL_CPU_ANY };
             dispatched_task.slice_ns = exec_slice_ns;
+
             self.bpf.dispatch_task(&dispatched_task).unwrap();
             dispatched += 1;
 
-            if dispatched == dispatch_limit {
+            if dispatched >= target_dispatches {
                 break;
             }
         }
