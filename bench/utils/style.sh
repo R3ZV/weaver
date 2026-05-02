@@ -6,6 +6,9 @@ RED="\033[31m"
 YELLOW="\033[33m"
 GREEN="\033[32m"
 
+USER_HOME=$(getent passwd "$SUDO_USER" | cut -d: -f6)
+export PATH="$USER_HOME/.cargo/bin:$PATH"
+
 check_dependencies() {
     if [ "$EUID" -ne 0 ]; then
         echo -e "${BOLD}${RED}[ERROR]${RESET}: Need sudo to load the eBPF scheduler."
@@ -41,6 +44,12 @@ check_dependencies() {
     if ! command -v vkmark &> /dev/null; then
         echo -e "${BOLD}${RED}[ERROR]${RESET}: Couldn't find vkmark."
         echo -e "${BOLD}Install package: vkmark.${RESET}"
+        exit 1
+    fi
+
+    if ! command -v scx_lavd &> /dev/null; then
+        echo -e "${BOLD}${RED}[ERROR]${RESET}: Couldn't find scx_lavd."
+        echo -e "${BOLD}You MUST install package via cargo: cargo install scx_lavd.${RESET}"
         exit 1
     fi
 }

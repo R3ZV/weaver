@@ -8,7 +8,7 @@ run_vkmark() {
 
     export MANGOHUD_CONFIG="autostart_log=1,output_folder=$(pwd)/results/vkmark,no_display"
 
-    mangohud vkmark > "results/vkmark/${sched}.log" 2>&1 &
+    sudo -u "$SUDO_USER" mangohud vkmark > "results/vkmark/${sched}.log" 2>&1 &
     local VKMARK_PID=$!
     sleep 1
 

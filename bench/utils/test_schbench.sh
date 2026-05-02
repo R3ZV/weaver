@@ -10,7 +10,7 @@ run_schbench() {
     print_test_banner "[Test 1]: Running schbench for ${runtime}s..." "$sched"
 
     echo "┌─────────────────────SCHBENCH─────────────────────┐"
-    echo "│ CPU Cores: $cores | M-Threads: $m_threads | W-Threads: $w_threads      │"
+    echo "│ CPU Cores: $cores | M-Threads: $m_threads | W-Threads: $w_threads       │"
     echo "└──────────────────────────────────────────────────┘"
 
     echo "Percentile,Latency" > "results/latencies/${sched}-${runtime}-${m_threads}-${w_threads}.csv"
