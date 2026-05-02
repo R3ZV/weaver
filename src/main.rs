@@ -14,7 +14,7 @@ use libbpf_rs::OpenObject;
 use scx_utils::UserExitInfo;
 use scx_utils::libbpf_clap_opts::LibbpfOpts;
 
-const RUNTIME_NS: u64 = 5_000_000;
+const RUNTIME_NS: u64 = 15_000_000;
 const LC_HALF_LIFE_NS: f64 = 5_000_000.0;
 const LC_WAKEUP_BOOST: f64 = 100.0;
 

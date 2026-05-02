@@ -43,7 +43,8 @@ M_THREADS=$(( CORES / 4 ))
 if [ "$M_THREADS" -lt 2 ]; then M_THREADS=2; fi
 W_THREADS=$(( CORES * 2 ))
 
-SCHEDULERS=("default" "weaver" "scx_lavd")
+SCHEDULERS=("weaver")
+# SCHEDULERS=("default" "weaver" "scx_lavd")
 for sched in "${SCHEDULERS[@]}"; do
     if [ "$sched" == "weaver" ]; then
         ../target/release/$sched 2> results/weaver_logs.txt &
