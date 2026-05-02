@@ -125,7 +125,7 @@ impl<'a> Scheduler<'a> {
             entry.decay(now);
             entry.vtime += (exec_runtime / weight) as u64;
 
-            let v_deadline = entry.vtime as f64 + (exec_runtime / (weight + entry.lc));
+            let v_deadline = entry.vtime as f64 + (RUNTIME_NS as f64 / (weight + entry.lc));
             self.tasks.push(Task {
                 inner: task,
                 v_deadline: v_deadline as u64,
