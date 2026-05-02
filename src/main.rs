@@ -47,14 +47,14 @@ impl PartialOrd for Task {
 struct TaskMetadata {
     // latency criticality
     lc: f64,
-    vtime: f64,
+    vtime: u64,
     prev_decay_ns: u64,
 }
 
 impl TaskMetadata {
-    fn new(now_ns: u64) -> Self {
+    fn new(now_ns: u64, vtime: u64) -> Self {
         Self {
-            vtime: 0.0,
+            vtime: vtime,
             lc: 0.0,
             prev_decay_ns: now_ns,
         }
@@ -74,6 +74,7 @@ struct Scheduler<'a> {
     bpf: BpfScheduler<'a>,
     tasks: BinaryHeap<Task>,
     meta: HashMap<i32, TaskMetadata>,
+    system_vtime: u64,
 }
 
 impl<'a> Scheduler<'a> {
@@ -94,6 +95,7 @@ impl<'a> Scheduler<'a> {
             bpf,
             tasks: BinaryHeap::new(),
             meta: HashMap::new(),
+            system_vtime: 0,
         })
     }
 
@@ -103,7 +105,7 @@ impl<'a> Scheduler<'a> {
             let entry = self
                 .meta
                 .entry(event.wakee_pid)
-                .or_insert(TaskMetadata::new(now));
+                .or_insert(TaskMetadata::new(now, self.system_vtime));
             entry.decay(now);
             entry.lc += LC_WAKEUP_BOOST;
         }
@@ -114,12 +116,16 @@ impl<'a> Scheduler<'a> {
             let now = Self::now();
             let weight = (task.weight as f64).max(1.0);
             let exec_runtime = task.exec_runtime as f64;
+            self.system_vtime = self.system_vtime.max(task.vtime);
 
-            let entry = self.meta.entry(task.pid).or_insert(TaskMetadata::new(now));
+            let entry = self
+                .meta
+                .entry(task.pid)
+                .or_insert(TaskMetadata::new(now, self.system_vtime));
             entry.decay(now);
-            entry.vtime += exec_runtime / weight;
+            entry.vtime += (exec_runtime / weight) as u64;
 
-            let v_deadline = entry.vtime + (exec_runtime / (weight + entry.lc));
+            let v_deadline = entry.vtime as f64 + (exec_runtime / (weight + entry.lc));
             self.tasks.push(Task {
                 inner: task,
                 v_deadline: v_deadline as u64,
