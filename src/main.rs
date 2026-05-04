@@ -12,12 +12,10 @@ use std::mem::MaybeUninit;
 
 #[derive(ValueEnum, Clone, Debug, Default)]
 enum DecayFunction {
-    /// Exponential Weighted Moving Average
-    Ewma,
+    Continous,
 
-    /// Exponential decay
     #[default]
-    Exp,
+    Discrete,
 }
 
 #[derive(ValueEnum, Clone, Debug, Default)]
@@ -43,8 +41,8 @@ pub struct Settings {
 impl fmt::Display for DecayFunction {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            DecayFunction::Ewma => write!(f, "ewma"),
-            DecayFunction::Exp => write!(f, "exp"),
+            DecayFunction::Discrete => write!(f, "discrete"),
+            DecayFunction::Continous => write!(f, "continous"),
         }
     }
 }

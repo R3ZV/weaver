@@ -10,7 +10,6 @@ use scx_utils::libbpf_clap_opts::LibbpfOpts;
 
 const MIN_SLICE_NS: u64 = 1_000_000;
 const RUNTIME_NS: u64 = 15_000_000;
-const LC_HALF_LIFE_NS: f64 = 15_000_000.0;
 const LC_WAKEUP_BOOST: f64 = 100.0;
 
 pub struct Scheduler<'a> {
@@ -62,19 +61,28 @@ impl TaskMetadata {
         }
     }
 
-    // TODO:
-    fn ewma_decay(&mut self, now_ns: u64) {
+    fn discrete_decay(&mut self, now_ns: u64) {
+        const HALF_LIFE_NS: u64 = 1_000_000;
+
         let delta_ns = now_ns.saturating_sub(self.prev_decay_ns);
         if delta_ns > 0 {
-            let decay_factor = (0.5_f64).powf(delta_ns as f64 / LC_HALF_LIFE_NS);
-            self.lc *= decay_factor;
+            let periods = delta_ns / HALF_LIFE_NS;
+            if periods > 0 {
+                self.lc = if periods >= 64 {
+                    0.0
+                } else {
+                    (self.lc as u64 >> periods) as f64
+                };
+                self.prev_decay_ns = now_ns - (delta_ns % HALF_LIFE_NS);
+            }
         }
-        self.prev_decay_ns = now_ns;
     }
-    fn exponential_decay(&mut self, now_ns: u64) {
+
+    fn continuous_decay(&mut self, now_ns: u64) {
+        const HALF_LIFE_NS: f64 = 1_000_000.0;
         let delta_ns = now_ns.saturating_sub(self.prev_decay_ns);
         if delta_ns > 0 {
-            let decay_factor = (0.5_f64).powf(delta_ns as f64 / LC_HALF_LIFE_NS);
+            let decay_factor = (0.5_f64).powf(delta_ns as f64 / HALF_LIFE_NS);
             self.lc *= decay_factor;
         }
         self.prev_decay_ns = now_ns;
@@ -116,8 +124,8 @@ impl<'a> Scheduler<'a> {
                 .or_insert(TaskMetadata::new(now, self.system_vtime));
 
             match self.settings.decay_function {
-                DecayFunction::Ewma => entry.ewma_decay(now),
-                DecayFunction::Exp => entry.exponential_decay(now),
+                DecayFunction::Discrete => entry.discrete_decay(now),
+                DecayFunction::Continous => entry.continuous_decay(now),
             }
             entry.lc += LC_WAKEUP_BOOST;
         }
@@ -136,8 +144,8 @@ impl<'a> Scheduler<'a> {
             entry.vtime += (exec_runtime / weight) as u64;
 
             match self.settings.decay_function {
-                DecayFunction::Ewma => entry.ewma_decay(now),
-                DecayFunction::Exp => entry.exponential_decay(now),
+                DecayFunction::Discrete => entry.discrete_decay(now),
+                DecayFunction::Continous => entry.continuous_decay(now),
             }
 
             self.system_vtime = self.system_vtime.max(entry.vtime);
