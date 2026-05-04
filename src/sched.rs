@@ -2,7 +2,8 @@ use std::collections::{BinaryHeap, HashMap};
 use std::mem::MaybeUninit;
 use std::time::SystemTime;
 
-use crate::{DecayFunction, DispatchStrategy, Settings, bpf::*};
+use crate::bpf::*;
+use crate::sched_settings::{DecayFunction, DispatchStrategy, Settings};
 use anyhow::Result;
 use libbpf_rs::OpenObject;
 use scx_utils::UserExitInfo;
@@ -55,7 +56,7 @@ impl PartialOrd for Task {
 impl TaskMetadata {
     fn new(now_ns: u64, vtime: u64) -> Self {
         Self {
-            vtime: vtime,
+            vtime,
             lc: 0.0,
             prev_decay_ns: now_ns,
         }
@@ -118,16 +119,43 @@ impl<'a> Scheduler<'a> {
     fn consume_wake_events(&mut self) {
         while let Ok(Some(event)) = self.bpf.dequeue_wakeup_event() {
             let now = Self::now();
-            let entry = self
+
+            let entry_waker = self
+                .meta
+                .entry(event.waker_pid)
+                .or_insert(TaskMetadata::new(now, self.system_vtime));
+
+            let waker_lc = {
+                match self.settings.decay_function {
+                    DecayFunction::Discrete => entry_waker.discrete_decay(now),
+                    DecayFunction::Continous => entry_waker.continuous_decay(now),
+                }
+                entry_waker.lc
+            };
+
+            let entry_wakee = self
                 .meta
                 .entry(event.wakee_pid)
                 .or_insert(TaskMetadata::new(now, self.system_vtime));
 
             match self.settings.decay_function {
-                DecayFunction::Discrete => entry.discrete_decay(now),
-                DecayFunction::Continous => entry.continuous_decay(now),
+                DecayFunction::Discrete => entry_wakee.discrete_decay(now),
+                DecayFunction::Continous => entry_wakee.continuous_decay(now),
             }
-            entry.lc += LC_WAKEUP_BOOST;
+
+            // If waker is blocked by a smaller priority task
+            // we give some of our criticality so the less important task
+            // doesn't block how much a critical task executes.
+            //
+            // We give / get just a portion so we don't elevate every task
+            // to high criticality.
+            if self.settings.inherit && waker_lc > 2.0 * entry_wakee.lc {
+                let give = (waker_lc - (2.0 * entry_wakee.lc)) * 0.125;
+                let can_get = entry_wakee.lc * 0.25;
+                entry_wakee.lc += can_get.min(give);
+            }
+
+            entry_wakee.lc += LC_WAKEUP_BOOST;
         }
     }
 
@@ -152,7 +180,7 @@ impl<'a> Scheduler<'a> {
             let v_deadline = entry.vtime + (RUNTIME_NS as f64 / (weight + entry.lc)) as u64;
             self.tasks.push(Task {
                 inner: task,
-                v_deadline: v_deadline as u64,
+                v_deadline,
             })
         }
     }
@@ -182,8 +210,8 @@ impl<'a> Scheduler<'a> {
     }
 
     fn batch_dispatch_tasks(&mut self) {
-        let nr_online_cpus = *self.bpf.nr_online_cpus_mut() as u64;
-        let nr_queued_in_kernel = *self.bpf.nr_queued_mut() as u64;
+        let nr_online_cpus = *self.bpf.nr_online_cpus_mut();
+        let nr_queued_in_kernel = *self.bpf.nr_queued_mut();
 
         let nr_tasks_target = 2 * nr_online_cpus;
         if nr_queued_in_kernel >= nr_tasks_target {
@@ -261,6 +289,7 @@ impl<'a> Scheduler<'a> {
 
         while !self.bpf.exited() {
             self.consume_wake_events();
+            self.retrieve_new_tasks();
             self.retrieve_new_tasks();
 
             let curr_ts = Self::now();
